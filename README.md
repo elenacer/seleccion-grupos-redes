@@ -1,6 +1,6 @@
 # seleccion-grupos-redes
 
-* **AUTHOR**: Elena Cerrato
+* **AUTHORS**: Elena Cerrato & Alberto Ibarrondo
 * **LANGUAGE**: Spanish
 * **PROGRAMMING LANGUAGE**: R
 
