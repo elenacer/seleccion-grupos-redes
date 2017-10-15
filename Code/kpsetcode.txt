@@ -1,0 +1,227 @@
+function (adj.matrix, size, type = "degree", M = Inf, T = ncol(adj.matrix), 
+    method = "min", binary = FALSE, cmode = "total", large = TRUE, 
+    geodist.precomp = NULL, seed = "top", parallel = FALSE, cluster = 2, 
+    round = 10, iteration = ncol(adj.matrix)) 
+{
+    d <- data.matrix(adj.matrix, rownames.force = NA)
+    N <- c(1:NCOL(d))
+    d1 = d
+    d1[d1 == 0] = Inf
+    m <- max(max(d), 1/min(d1))
+    storage <- c(0:round)
+    if (is.numeric(seed)) {
+        if (isTRUE(parallel)) {
+            C <- seed
+            R <- N[!N %in% C]
+            for (r in 2:(round + 1)) {
+                par <- function(...) {
+                  for (t in 1:iteration) {
+                    i <- sample.int(NROW(C), 1)
+                    j <- sample.int(NROW(R), 1)
+                    if (delta.score(adj.matrix, C, R, i, j, type, 
+                      M, T, method, binary, cmode, large, geodist.precomp) > 
+                      0) {
+                      C[i] <- R[j]
+                    }
+                    R <- N[!N %in% C]
+                  }
+                  col1 <- C
+                  col1 <- sort(col1)
+                  col2 <- kpcent(adj.matrix, C, type, M, T, method, 
+                    binary, cmode, large, geodist.precomp)
+                  names(col2) <- NULL
+                  result1 <- list(keyplayers = col1, centrality = col2)
+                  result1
+                }
+                df <- do.call(rbind, parallel::mclapply(seq_len(cluster), 
+                  par))
+                rank <- rank(as.numeric(df[, 2]), ties.method = "first")
+                df <- cbind(df, rank)
+                for (i in 1:NROW(df)) {
+                  if (df[i, 3] == cluster) 
+                    C <- df[i, 1]
+                }
+                C <- C[[1]]
+                R <- N[!N %in% C]
+                storage[r] <- kpcent(adj.matrix, C, type, M, 
+                  T, method, binary, cmode, large, geodist.precomp)
+            }
+            if (storage[round + 1] - storage[round] > (1/(2 * 
+                (NCOL(d)^2) * (m^3)))) 
+                warning("The specified number of rounds have been reached. The solution may not converge yet.")
+        }
+        else {
+            C <- seed
+            R <- N[!N %in% C]
+            for (r in 2:(round + 1)) {
+                for (i in 1:NROW(C)) {
+                  for (j in 1:min(NROW(R), iteration)) {
+                    if (delta.score(adj.matrix, C, R, i, j, type, 
+                      M, T, method, binary, cmode, large, geodist.precomp) > 
+                      0) {
+                      C[i] <- R[j]
+                    }
+                  }
+                  R <- N[!N %in% C]
+                }
+                storage[r] <- kpcent(adj.matrix, C, type, M, 
+                  T, method, binary, cmode, large, geodist.precomp)
+            }
+            if (storage[round + 1] - storage[round] > (1/(2 * 
+                (NCOL(d)^2) * (m^3)))) 
+                warning("The specified number of round has been reached. The solution may not converge yet.")
+        }
+    }
+    else if (seed == "top") {
+        C <- sample(N, size)
+        R <- N[!N %in% C]
+        if (NROW(C) == 1) {
+            for (j in 1:NROW(R)) {
+                if (delta.score(adj.matrix, C, R, 1, j, type, 
+                  M, T, method, binary, cmode, large, geodist.precomp) > 
+                  0) 
+                  C[1] <- R[j]
+            }
+        }
+        else {
+            C <- topnode(adj.matrix, type, M, T, method, binary, 
+                cmode, large, geodist.precomp)[1:size]
+            R <- N[!N %in% C]
+            if (isTRUE(parallel)) {
+                for (r in 2:(round + 1)) {
+                  par <- function(...) {
+                    for (t in 1:iteration) {
+                      i <- sample.int(NROW(C), 1)
+                      j <- sample.int(NROW(R), 1)
+                      if (delta.score(adj.matrix, C, R, i, j, 
+                        type, M, T, method, binary, cmode, large, 
+                        geodist.precomp) > 0) 
+                        C[i] <- R[j]
+                      R <- N[!N %in% C]
+                    }
+                    col1 <- C
+                    col1 <- sort(col1)
+                    col2 <- kpcent(adj.matrix, C, type, M, T, 
+                      method, binary, cmode, large, geodist.precomp)
+                    names(col2) <- NULL
+                    result1 <- list(keyplayers = col1, centrality = col2)
+                    result1
+                  }
+                  df <- do.call(rbind, parallel::mclapply(seq_len(cluster), 
+                    par))
+                  rank <- rank(as.numeric(df[, 2]), ties.method = "first")
+                  df <- cbind(df, rank)
+                  for (i in 1:NROW(df)) {
+                    if (df[i, 3] == cluster) 
+                      C <- df[i, 1]
+                  }
+                  C <- C[[1]]
+                  R <- N[!N %in% C]
+                  storage[r] <- kpcent(adj.matrix, C, type, M, 
+                    T, method, binary, cmode, large, geodist.precomp)
+                }
+                if (storage[round + 1] - storage[round] > (1/(2 * 
+                  (NCOL(d)^2) * (m^3)))) 
+                  warning("The specified number of round has been reached. The solution may not converge yet.")
+            }
+            else {
+                for (r in 2:(round + 1)) {
+                  for (i in 1:NROW(C)) {
+                    for (j in 1:min(NROW(R), iteration)) {
+                      if (delta.score(adj.matrix, C, R, i, j, 
+                        type, M, T, method, binary, cmode, large, 
+                        geodist.precomp) > 0) 
+                        C[i] <- R[j]
+                    }
+                    R <- N[!N %in% C]
+                  }
+                  storage[r] <- kpcent(adj.matrix, C, type, M, 
+                    T, method, binary, cmode, large, geodist.precomp)
+                }
+                if (storage[round + 1] - storage[round] > (1/(2 * 
+                  (NCOL(d)^2) * (m^3)))) 
+                  warning("The specified number of round has been reached. The solution may not converge yet.")
+            }
+        }
+    }
+    else if (seed == "random") {
+        C <- sample(N, size)
+        R <- N[!N %in% C]
+        if (NROW(C) == 1) {
+            for (j in 1:NROW(R)) {
+                if (delta.score(adj.matrix, C, R, 1, j, type, 
+                  M, T, method, binary, cmode, large, geodist.precomp) > 
+                  0) 
+                  C[1] <- R[j]
+            }
+        }
+        else {
+            if (isTRUE(parallel)) {
+                par <- function(...) {
+                  C <- sample(N, size)
+                  R <- N[!N %in% C]
+                  storage <- c(0:round)
+                  for (r in 2:(round + 1)) {
+                    for (i in 1:NROW(C)) {
+                      R.sub <- sample(R, min(NROW(R), iteration))
+                      for (j in 1:NROW(R.sub)) {
+                        if (delta.score(adj.matrix, C, R, i, 
+                          j, type, M, T, method, binary, cmode, 
+                          large, geodist.precomp) > 0) 
+                          C[i] <- R.sub[j]
+                      }
+                      R <- N[!N %in% C]
+                    }
+                    storage[r] <- kpcent(adj.matrix, C, type, 
+                      M, T, method, binary, cmode, large, geodist.precomp)
+                  }
+                  if (storage[round + 1] - storage[round] > (1/(2 * 
+                    (NCOL(d)^2) * (m^3)))) 
+                    warning("The specified number of round has been reached. The solution may not converge yet.")
+                  col1 <- C
+                  col1 <- sort(col1)
+                  col2 <- kpcent(adj.matrix, C, type, M, T, method, 
+                    binary, cmode, large, geodist.precomp)
+                  names(col2) <- NULL
+                  result1 <- list(keyplayers = col1, centrality = col2)
+                  result1
+                }
+                df <- do.call(rbind, parallel::mclapply(seq_len(cluster), 
+                  par))
+                rank <- rank(as.numeric(df[, 2]), ties.method = "first")
+                df <- cbind(df, rank)
+                for (i in 1:NROW(df)) {
+                  if (df[i, 3] == cluster) 
+                    C <- df[i, 1]
+                }
+                C <- C[[1]]
+            }
+            else {
+                for (r in 2:(round + 1)) {
+                  for (i in 1:NROW(C)) {
+                    for (j in 1:min(NROW(R), iteration)) {
+                      if (delta.score(adj.matrix, C, R, i, j, 
+                        type, M, T, method, binary, cmode, large, 
+                        geodist.precomp) > 0) 
+                        C[i] <- R[j]
+                    }
+                    R <- N[!N %in% C]
+                  }
+                  storage[r] <- kpcent(adj.matrix, C, type, M, 
+                    T, method, binary, cmode, large, geodist.precomp)
+                }
+                if (storage[round + 1] - storage[round] > (1/(2 * 
+                  (NCOL(d)^2) * (m^3)))) 
+                  warning("The specified number of round has been reached. The solution may not converge yet.")
+            }
+        }
+    }
+    call <- match.call()
+    col1 <- C
+    col1 <- sort(col1)
+    col2 <- kpcent(adj.matrix, C, type, M, T, method, binary, 
+        cmode, large, geodist.precomp)
+    names(col2) <- NULL
+    result <- list(keyplayers = col1, centrality = col2)
+    result
+}
